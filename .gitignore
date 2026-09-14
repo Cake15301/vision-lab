@@ -1,0 +1,15 @@
+# 大文件，绝对不能进仓库
+wheels/
+runs/
+weights/
+datasets/
+*.pt
+*.onnx
+
+# Python 垃圾
+__pycache__/
+*.pyc
+
+# 编辑器
+.vscode/
+.idea/
