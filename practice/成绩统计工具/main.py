@@ -1,10 +1,15 @@
+import argparse
 import score_tools
 
-path = "D:/AI/zcode files/vision-lab/practice/成绩.csv"
+parser = argparse.ArgumentParser(description="成绩统计工具：读一份成绩 CSV，算平均分、最高分、最低分")
+parser.add_argument("--source", required=True, help="成绩 CSV 文件的路径")
+
+args = parser.parse_args()
 
 print(f"我是 main，我的名字是：{__name__}")
 
-rows = score_tools.read_scores(path)
+rows = score_tools.read_scores(args.source)
+
 print(rows)
 print(f"平均成绩为{score_tools.average(rows)}")
 top = score_tools.best(rows)
