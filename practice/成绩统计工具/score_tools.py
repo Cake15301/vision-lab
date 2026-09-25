@@ -12,7 +12,7 @@ def read_scores(path):
 def average(rows):
     total = 0
     for row in rows:
-        total += int(row[1])
+        total += row[1]
     return total / len(rows)
 
 def best(rows):
@@ -21,6 +21,24 @@ def best(rows):
         if row[1] > top_row[1]:
             top_row = row
     return top_row
+
+def count(rows):
+    return len(rows)
+
+def lowest(rows):
+    lowest_row = rows[0]
+    for row in rows:
+        if row[1] < lowest_row[1]:
+            lowest_row = row
+    return lowest_row
+
+def above_average(rows):
+    avg = average(rows)
+    above_rows = []
+    for row in rows:
+        if row[1] > avg:
+            above_rows.append(row[0])
+    return above_rows
 
 if __name__ == "__main__":
     print(f"我是 score_tools，我的名字是：{__name__}")
