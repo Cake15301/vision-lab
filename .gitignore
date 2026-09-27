@@ -9,6 +9,7 @@ datasets/
 # Python 垃圾
 __pycache__/
 *.pyc
+.venv/
 
 # 编辑器
 .vscode/
