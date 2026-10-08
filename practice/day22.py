@@ -100,7 +100,7 @@ print("老实版字段:", old.cls, old.cx, old.cy, old.w, old.h)
 print("dataclass 字段:", new.cls, new.cx, new.cy, new.w, new.h)
 print("老实版比相等:", BBoxOld(45, 0.479492, 0.688771, 0.955609, 0.5955) == BBoxOld(45, 0.479492, 0.688771, 0.955609, 0.5955))
 print("dataclass 比相等:", BBox(45, 0.479492, 0.688771, 0.955609, 0.5955) == BBox(45, 0.479492, 0.688771, 0.955609, 0.5955))
-print(b.area)  
+print(new.area)  
 
 @dataclass
 class BBox2:
