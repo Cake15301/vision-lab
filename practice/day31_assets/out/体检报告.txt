@@ -1,7 +1,7 @@
-fail01.jpg  亮度 61.64  正常
-fail02.jpg  亮度 58.17  正常
-fail03.jpg  亮度 57.37  正常
-fail04.jpg  亮度 58.65  正常
-ok1.jpg  亮度 49.68  太暗
-ok2.jpg  亮度 57.91  正常
-scratch.jpg  亮度 52.52  太暗
+fail01.jpg  5472x3648 -> 800x533  亮度 61.64  正常  存盘 True  对比图 True
+fail02.jpg  5472x3648 -> 800x533  亮度 58.17  正常  存盘 True  对比图 True
+fail03.jpg  5472x3648 -> 800x533  亮度 57.37  正常  存盘 True  对比图 True
+fail04.jpg  5472x3648 -> 800x533  亮度 58.65  正常  存盘 True  对比图 True
+ok1.jpg  5472x3648 -> 800x533  亮度 49.68  太暗  存盘 True  对比图 True
+ok2.jpg  5472x3648 -> 800x533  亮度 57.91  正常  存盘 True  对比图 True
+scratch.jpg  5472x3648 -> 800x533  亮度 52.52  太暗  存盘 True  对比图 True
