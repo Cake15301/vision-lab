@@ -1,0 +1,123 @@
+# ============================================================
+# day39.py —— W06 第 7 天（收官）：完整轮廓提取流水线
+#   读图 → 灰度 → 滤波 → 阈值 → 形态学 → 找轮廓 → 面积筛 → 量形 → 画框存图
+# 跑法：D:/python/python.exe day39.py
+# 干的事：
+#   往一张撒了椒盐噪声和脏斑的齿轮图上，把齿轮完整地找出来、量出来、
+#   把标注图存出来，最后打印"体检表"和流水线各站的验收数字。
+# ============================================================
+
+from pathlib import Path
+import cv2
+import numpy as np
+
+OUT_DIR = Path("D:/AI/zcode files/vision-lab/practice/day39_assets/out")   # 成品存这里（今天建）
+OUT_DIR.mkdir(parents=True, exist_ok=True)                                  # 文件夹不存在就建；已有不报错
+
+# ==================== 配置区：这条流水线的全部旋钮 ====================
+# 站号和文档里的九站对应。以后调参只改这里，别进下面的代码里翻。
+# 每个值为什么这么设：右边注释 + 文末"参数说明表"总表。
+
+TARGET_W = 1000    # 站1：读图后统一缩到 1000 像素宽——和本周六天的实验同一规格，数字才能对账
+MEDIAN_K = 5       # 站3：中值滤波窗口边长（像素，必须是奇数）。考题是椒盐噪声，Day33 实测中值专治
+MORPH_K  = 3       # 站5：形态学印章边长 3（3×3 方块核）。只擦得动"比印章小"的白残渣，Day36 实测够用
+MIN_AREA = 60      # 站7：面积闸门（单位：平方像素）。灰尘最大 14.5、齿轮 18 万，60 站中间、两头留大余量
+# ==================================================================
+
+def to_bgr(image):
+    """小工具①：一层灰度补成三层，才能往上写彩色线（Day37 传下来的）。"""
+    return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+def big(image, w=480):
+    """小工具②：把小图放大到 w 宽再存，为了看得清；最近邻插值＝一个格子变一个方块，边不糊。"""
+    return cv2.resize(image, (w, int(image.shape[0] * w / image.shape[1])),
+                      interpolation=cv2.INTER_NEAREST)
+
+# ---------- 段1. 站①读图灰度 ＋ 造考题：撒椒盐噪声、涂 3 块脏斑 ----------
+# 这段在干什么：把 gear.png 缩放灰度化当"标准答案"，再往上面撒 4% 的椒盐坏点、
+#               涂 3 块 6×6 的白色脏斑，得到"考题图"sp 存出去。干完手里有：gray（答案）、sp（考题）。
+SRC = Path("D:/AI/zcode files/vision-lab/practice/day33_assets/in/gear.png")   # 素材：你的齿轮图
+img = cv2.imread(str(SRC))                    # 读图（Day26）；注意中文路径会读空，这个路径全是英文
+ih, iw = img.shape[:2]                        # 原图的高 ih、宽 iw（shape 是先行后列）
+gray = cv2.cvtColor(cv2.resize(img, (TARGET_W, int(ih * TARGET_W / iw))),   # 缩到 1000 宽（等比）
+                    cv2.COLOR_BGR2GRAY)       # 再压成一层灰度 → 这就是"标准答案"gray
+print("标准答案 shape =", gray.shape, " dtype =", gray.dtype)
+
+rng  = np.random.default_rng(42)              # 随机数机器（Day33）；42 是种子：同种子每次抽签结果一样
+roll = rng.random(gray.shape)                 # 给每个像素抽一个 0~1 的小数
+salt   = roll < 0.02                          # 小于 0.02 的位置 → 盐（白点），约 2%
+pepper = roll > 0.98                          # 大于 0.98 的位置 → 椒（黑点），另约 2%
+sp = gray.copy()                              # 复制一份再改；直接 sp = gray 会连答案一起改
+sp[salt]   = 255                              # 盐点一次性全改白（布尔索引赋值，Day33 教过）
+sp[pepper] = 0                                # 椒点一次性全改黑
+
+spots = [(40, 60), (660, 120), (130, 880)]    # 3 块脏斑的左上角（行, 列）——都挑在背景区、躲开齿轮
+for r, c in spots:                            # 挨个取斑的位置：r 是行号，c 是列号
+    sp[r:r + 6, c:c + 6] = 255                # 涂一块 6 行 × 6 列的白色斑（切片赋值，Day36 教过）
+
+print("考题造好：盐点", int(salt.sum()), "个，椒点", int(pepper.sum()), "个，脏斑", len(spots), "块（每块 6×6）")
+cv2.imwrite(str(OUT_DIR / "01_dirty.png"), sp)   # 存考题图（OpenCV 存中文路径会失败，所以文件名用英文）
+
+# ---------- 段2. 站③滤波：中值 MEDIAN_K，然后给坏点点名 ----------
+# 这段在干什么：对考题图做中值滤波（专治椒盐），再跟标准答案逐像素对账——
+#               30213 个坏点位置里，还剩几个"差 100 以上"没救回来的。干完手里有：den（滤波图）。
+den = cv2.medianBlur(sp, MEDIAN_K)            # 中值滤波：窗口内 25 个数取中位数当新值（Day33）
+d = cv2.absdiff(den, gray)                    # 差异图：每个像素 = |滤波后 - 标准答案|，0 表示一模一样
+
+lost_salt   = int((d[salt]   > 100).sum())    # 布尔索引取值：把"盐点位置"的差异取出来，数超过 100 的
+lost_pepper = int((d[pepper] > 100).sum())    # 椒点位置同理
+print("站③滤波验收：盐点没救回来的", lost_salt, "／", int(salt.sum()),
+      "，椒点没救回来的", lost_pepper, "／", int(pepper.sum()))
+cv2.imwrite(str(OUT_DIR / "02_median.png"), den)   # 滤波图也存一张，肉眼看看坏点是不是没了
+
+# ---------- 段3. 站④阈值(Otsu) ＋ 站⑤形态学(开运算) ----------
+# 这段在干什么：把滤波图切成黑白面具，再开运算擦白渣；记录阈值、面具白像素、擦掉多少。
+#               干完手里有：mask（面具）、clean（擦干净的面具）。
+th, mask = cv2.threshold(den, 0, 255,                                  # 第2个参数给 0 没关系：
+                         cv2.THRESH_BINARY + cv2.THRESH_OTSU)          # 加了 OTSU，阈值由它自己算
+print("站④Otsu 阈值 =", int(th), " 面具白像素 =", int((mask > 0).sum()))   # 面具只有 0/255，>0 就是数白
+
+stamp = np.ones((MORPH_K, MORPH_K), np.uint8)          # 印章：3×3 的方块核（MORPH_K 来自配置区）
+clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, stamp)  # 开运算＝先腐蚀再膨胀：比印章小的白块消失
+wiped = int((mask > 0).sum()) - int((clean > 0).sum()) # 擦掉多少 = 开运算前后的白像素差
+print("站⑤开运算擦掉的白像素 =", wiped, "（比印章小的残渣归它管；脏斑归站⑦）")
+cv2.imwrite(str(OUT_DIR / "03_clean_mask.png"), clean)  # 存擦干净的面具，黑白分明
+
+# ---------- 段4. 站⑥找轮廓 ＋ 站⑦面积筛 ----------
+# 这段在干什么：在擦干净的面具上找最外层轮廓，打印每个的面积，再按配置区的 MIN_AREA 筛掉灰尘。
+#               干完手里有：kept（筛完留下的轮廓列表，正常应是 1 个齿轮）。
+cnts, _ = cv2.findContours(clean, cv2.RETR_EXTERNAL,      # EXTERNAL：数零件只要最外层（Day37）
+                           cv2.CHAIN_APPROX_SIMPLE)       # SIMPLE：只记拐点，点少算得快
+print("站⑥EXTERNAL 找到轮廓 =", len(cnts), "个")
+areas = sorted([round(cv2.contourArea(c), 1) for c in cnts], reverse=True)
+# ↑ 列表推导式算每个轮廓的面积（连点成线量法），sorted 按从大到小排好——打印用
+print("  各轮廓面积：", areas)
+
+kept = [c for c in cnts if cv2.contourArea(c) >= MIN_AREA]   # 面积闸门：小于 60 的当灰尘扔掉
+print("站⑦面积 >=", MIN_AREA, "筛完剩", len(kept), "个")
+
+# ---------- 段5. 站⑧量形 ＋ 站⑨画框存图 ＋ 体检表 ----------
+# 这段在干什么：给齿轮做全套体检（三种框＋占空比），把框画在考题图上存出去，打印体检表。
+# ！！！cv2.rectangle和cv2.boundingRect配套使用；cv2.boxPoints和cv2.drawContours配套使用；cv2.minAreaRect和cv2.boxEnclosingCircle配套使用。
+
+gc = sorted(kept, key=cv2.contourArea, reverse=True)[0]   # 挑面积最大的轮廓当"目标"（正常就 1 个）
+gx, gy, gw, gh = cv2.boundingRect(gc)          # 红框 4 件套：左上角 (x, y) ＋ 宽 w ＋ 高 h（Day38）
+g_rect = cv2.minAreaRect(gc)                   # 绿框：能转的最小外接矩形，三层套娃（Day38）
+g_center, g_size, g_angle = g_rect             # 拆第一层：中心 / 尺寸 / 角度
+g_rw, g_rh = g_size                            # 拆第二层：尺寸再拆成宽、高
+g_c, g_r = cv2.minEnclosingCircle(gc)          # 蓝圆：圆心 ＋ 半径，全是小数（Day38）
+
+view = cv2.cvtColor(sp, cv2.COLOR_GRAY2BGR)    # ⚠️ 画在"考题图"上（带噪声），验收效果最直观
+cv2.rectangle(view, (gx, gy), (gx + gw, gy + gh), (0, 0, 255), 3)        # 红：正外接矩形（线宽 3）
+gbox = cv2.boxPoints(g_rect).astype(int)       # 绿框 4 个角转整数——boxPoints 和 astype 永远成对
+cv2.drawContours(view, [gbox], 0, (0, 255, 0), 3)                        # 绿：最小外接矩形
+cv2.circle(view, (int(g_c[0]), int(g_c[1])), int(g_r), (255, 0, 0), 3)   # 蓝：外接圆（圆心半径都要 int）
+cv2.imwrite(str(OUT_DIR / "04_result.png"), view)
+
+print("齿轮体检表（从撒了 4% 噪声＋3 块脏斑的考题图上量出来的）：")
+print("  红框（不能转）：", gw, "×", gh, " 左上角 (", gx, ",", gy, ")")
+print("  绿框（能转）  ：", round(g_rw, 1), "×", round(g_rh, 1), " 角度", round(g_angle, 2))
+print("  蓝圆        ：圆心 (", round(g_c[0], 1), ",", round(g_c[1], 1), ") 半径", round(g_r, 1))
+print("  轮廓面积", round(cv2.contourArea(gc), 1), " 占空比", round(cv2.contourArea(gc) / (gw * gh), 4))
+print("流水线跑完。三件交付物：day39.py ＋ out 里 4 张图 ＋ 参数说明表（收工段抄）")
+
