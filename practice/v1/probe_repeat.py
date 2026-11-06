@@ -8,8 +8,11 @@ import cv2          # 存图、模糊、缩放都靠它
 import numpy as np  # 挪格子用 np.roll
 import pipeline     # 有守门员，导入它不会自己跑一批
 
-SRC = Path("assets/in/01_std.png")   # 被试：标准件
-PROBE = Path("assets/probe")         # 扰动图存这儿，留作证据可复查
+# SRC：被试零件的地址 —— 从"本脚本所在的文件夹"（.parent）出发，站在哪个文件夹跑都对
+SRC = Path(__file__).parent / "assets" / "in" / "01_std.png"
+
+# PROBE：证据图的存放地 —— 同样跟着脚本走
+PROBE = Path(__file__).parent / "assets" / "probe"
 PROBE.mkdir(parents=True, exist_ok=True)
 
 img = cv2.imread(str(SRC))           # imread 不认 Path 对象，和 pipeline 里一样要 str()

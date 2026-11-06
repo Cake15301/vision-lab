@@ -3,7 +3,7 @@
 # 干什么：扫一个文件夹的零件图，逐件量尺寸、判合格、画标注图、出一张结果表。
 # 注释规矩（Day42 起）：只写"为什么"，不写"是什么"。
 # 参数的含义、单位、取值依据统一放 参数依据.md —— 改参数先改那张表，再改这里的值。
-# 跑法（在 v1 文件夹里）：D:/python/python.exe pipeline.py
+# 跑法：D:/python/python.exe pipeline.py（在 v1 里）或 D:/python/python.exe v1/pipeline.py（在任何文件夹）
 # ============================================================
 
 from pathlib import Path   # 造"地址牌"
@@ -11,8 +11,10 @@ import cv2                 # OpenCV：整条流水线的九站全在它这儿
 import numpy as np         # numpy：造形态学用的小方块
 import csv                 # 标准库的"表格读写"工具（Day12 用它读过成绩表，今天用它写）
 
-# IN_DIR：原料文件夹（三件样件在这里）
-IN_DIR = Path("D:/AI/zcode files/vision-lab/practice/v1/assets/in")
+# IN_DIR：原料文件夹 —— 从"脚本自己的位置"出发往下走两步
+# __file__ 是 Python 天生就有的变量：本脚本在硬盘上的完整地址（Day43 亲眼看过）
+# .parent  退一层：从 ".../v1/pipeline.py" 退到 ".../v1" 这个文件夹
+IN_DIR = Path(__file__).parent / "assets" / "in"
 
 # ============ 配置区：九站的旋钮 ============
 # 每个值后面只写"为什么是这个值"；含义、单位和实测出处见 参数依据.md。
@@ -32,8 +34,8 @@ TOL_AREA = 0.05        # 实测波动 0.17%，给 5% 是 29 倍；再放宽到 1
 TOL_FILL = 0.02        # 实测波动 0.0012，给 0.02 是 16 倍；再紧到 0.001，稍模糊的好件就被误判 NG
 
 # ============ 发货区：标注图存这里 ============
-# 今天先写死绝对路径；Day43 改成"跟着文件走"，换台电脑也能跑
-OUT_DIR = Path("D:/AI/zcode files/vision-lab/practice/v1/assets/out")
+# 同样跟着脚本走：脚本在哪，它就找哪儿的 assets/out，换电脑、换文件夹都不用改代码
+OUT_DIR = Path(__file__).parent / "assets" / "out"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -82,18 +84,6 @@ def measure(path):
     # ---------- 装进箱子递回去 ----------
     # x、y、图 三样必须带回去：annotate 画框要用，而且必须是同一张图，否则框会错位
     # 占空比 = 轮廓面积 ÷ 外接矩形面积（怎么读：接近 1 表示方方正正占满框）
-    return {"面积": area, "宽": w, "高": h, "占空比": area / (w * h),
-            "x": x, "y": y, "图": gray}
-
-    # ---------- 站⑧ 量形 ----------
-    part = sorted(kept, key=cv2.contourArea, reverse=True)[0]   # 面积最大的那个当目标
-    x, y, w, h = cv2.boundingRect(part)                        # 正外接矩形：左上角(x,y)＋宽w＋高h
-    area = cv2.contourArea(part)                               # 轮廓面积（平方像素）
-
-    # ---------- 装进箱子递回去 ----------
-    # 占空比 = 轮廓面积 ÷ 外接矩形面积（无量纲）—— 零件"占满外框的程度"
-    # x, y 是正外接矩形的左上角（像素）—— 昨天量了宽高却没留位置，今天画框要用它
-    # 图 就是这次量尺寸用的那张灰度图：坐标是这张图上的，画也必须画在它上面，才不会错位
     return {"面积": area, "宽": w, "高": h, "占空比": area / (w * h),
             "x": x, "y": y, "图": gray}
 
