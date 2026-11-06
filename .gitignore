@@ -14,3 +14,6 @@ __pycache__/
 # 编辑器
 .vscode/
 .idea/
+
+# v1 跑出来的东西：标注图和结果表，跑一遍就有，不进仓库
+practice/v1/assets/out/
